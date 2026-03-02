@@ -106,7 +106,7 @@ def generar_estudi_web():
                 c.removeByClass(cl)
                 
         if i < 7:
-            arrel_str = acord.replace('maj7','').replace('m7','').replace('m','').replace('dim','').replace('7','')
+            arrel_str = acord.replace('maj7','').replace('dim','').replace('m7','').replace('m','').replace('7','')
             itvl = interval.Interval(pitch.Pitch('C4'), pitch.Pitch(arrel_str + '4'))
             c_d.transpose(itvl, inPlace=True)
             c_e.transpose(itvl, inPlace=True)
