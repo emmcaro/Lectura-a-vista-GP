@@ -194,8 +194,8 @@ def generar_estudi_web():
         score_out.transpose(itvl_transp, inPlace=True)
         
     for element in score_out.flatten().notes:
-        # Correcció per a les pliques
         element.stemDirection = 'unspecified' 
+        element.beams.clear()  # <-- AIXÒ NETEJARÀ LES PLIQUES
         
     # Ara només retornem la partitura i la tonalitat
     return score_out, tonalitat_desti
