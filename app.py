@@ -138,7 +138,7 @@ def generar_estudi_web():
             c_d.number = c_e.number = i + 1
             
         for c in [c_d, c_e]:
-            for cl in ['KeySignature', 'TimeSignature', 'Clef', 'SystemLayout', 'PageLayout']:
+            for cl in ['KeySignature', 'TimeSignature', 'Clef', 'SystemLayout', 'PageLayout', 'Barline']:
                 c.removeByClass(cl)
                 
         if i < 7:
