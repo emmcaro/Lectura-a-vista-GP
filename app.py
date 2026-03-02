@@ -163,7 +163,7 @@ if st.button('Generar nova lectura a vista'):
             
             # 2. Mostrem els detalls musicals a l'usuari
             st.success("✨ Estudi generat amb èxit!")
-            st.info(f"🎵 **Tonalitat:** {tonalitat.replace('-', 'b')} Major  |  🎹 **Harmonia:** {' - '.join(harmonia)}")
+            st.info(f"🎵 **Tonalitat:** {tonalitat.replace('-', 'b')} Major")
             
             # 3. Preparem l'arxiu per baixar-lo
             path_temporal = score_final.write('musicxml')
