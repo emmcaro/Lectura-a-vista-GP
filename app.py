@@ -10,7 +10,7 @@ from music21 import *
 warnings.filterwarnings("ignore")
 
 # --- CONFIGURACIÓ DE STREAMLIT ---
-st.set_page_config(page_title="Generador d'Estudis", layout="centered")
+st.set_page_config(page_title="Generador d'Estudis", layout="wide")
 st.title("🎵 Generador de Lectura a Vista")
 st.write("Clica el botó per generar un nou estudi a l'atzar i llegir-lo directament des d'aquí.")
 
@@ -40,10 +40,15 @@ def ajustar_notes(pitch_obj, escala_dict):
         pitch_obj.accidental = pitch.Accidental(alteracio)
 
 # --- FUNCIÓ DEL VISOR (OSMD) ---
+# --- FUNCIÓ DEL VISOR (OSMD) ---
 def mostrar_partitura(xml_bytes):
     xml_str = xml_bytes.decode('utf-8')
     xml_escapat = json.dumps(xml_str)
     html_code = f"""
+    <style>
+      /* Això crea un "full de paper" blanc perquè el mode fosc no amagui les notes */
+      body {{ background-color: #FFFFFF; margin: 0; padding: 15px; border-radius: 8px; }}
+    </style>
     <div id="osmdCanvas"></div>
     <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.8.8/build/opensheetmusicdisplay.min.js"></script>
     <script>
@@ -51,14 +56,17 @@ def mostrar_partitura(xml_bytes):
         autoResize: true,
         backend: "svg",
         drawTitle: false,
-        drawComposer: false, // Amaguem l'autor al visor web
-        drawPartNames: false // Amaguem el nom de l'instrument al visor web
+        drawComposer: false, 
+        drawPartNames: false,
+        newSystemFromXML: true // <-- Això força els 4 compassos per línia!
       }});
       osmd.load({xml_escapat}).then(function() {{
         osmd.render();
       }});
     </script>
     """
+    # Hem ajustat l'alçada a 500 perquè en ser més ample ja no necessita tant d'espai vertical
+    components.html(html_code, height=500, scrolling=True)
     components.html(html_code, height=600, scrolling=True)
 
 # --- LÒGICA PRINCIPAL ---
