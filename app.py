@@ -1,4 +1,6 @@
 import streamlit as st
+import streamlit.components.v1 as components  # NOU
+import json  # NOU
 import os
 import random
 import copy
