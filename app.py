@@ -150,7 +150,7 @@ def generar_estudi_web():
         score_out.transpose(itvl_transp, inPlace=True)
         
     for element in score_out.flatten().notes:
-        element.stemDirection = None 
+        element.stemDirection = 'unspecified'
         
     return score_out, tonalitat_desti, progressio
 
