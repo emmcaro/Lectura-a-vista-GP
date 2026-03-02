@@ -10,7 +10,6 @@ from music21 import *
 warnings.filterwarnings("ignore")
 
 # --- CONFIGURACIÓ DE STREAMLIT ---
-# Fixem el "wide" perquè la partitura es vegi gran a tota la pantalla
 st.set_page_config(page_title="Generador d'Estudis", layout="wide")
 st.title("🎵 Generador de Lectura a Vista")
 st.write("Clica el botó per generar un nou estudi a l'atzar i llegir-lo directament des d'aquí.")
@@ -132,7 +131,6 @@ def generar_estudi_web():
             c_d.number = c_e.number = i + 1
             
         for c in [c_d, c_e]:
-            # Aquí esborrem també qualsevol Barline original (soluciona la doble barra al c.7)
             for cl in ['KeySignature', 'TimeSignature', 'Clef', 'SystemLayout', 'PageLayout', 'Barline']:
                 c.removeByClass(cl)
                 
@@ -187,14 +185,15 @@ def generar_estudi_web():
     # --- FIX DE LES PLIQUES ---
     for element in score_out.flatten().notes:
         element.stemDirection = 'unspecified'
-        # Buidem la llista interna de beams (barres d'agrupació) de forma segura
         if hasattr(element, 'beams'):
-            element.beams.beamList = []
+            element.beams = beam.Beams() # L'assignem a un objecte de la classe correcte, buit.
+            
+    # Forcem a que recalcoli totes les agrupacions amb la lògica estàndard
+    score_out.makeBeams(inPlace=True)
         
     return score_out, tonalitat_desti
 
 # --- INTERFÍCIE D'USUARI ---
-# Ara només hi ha un sol bloc per evitar repeticions a la pantalla i sense missatges d'èxit/tonalitat
 if st.button('Generar nova lectura a vista'):
     with st.spinner('Creant la partitura...'):
         try:
