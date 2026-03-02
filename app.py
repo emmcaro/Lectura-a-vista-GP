@@ -61,11 +61,9 @@ def mostrar_partitura(xml_bytes):
         drawTitle: false,
         drawComposer: false, 
         drawPartNames: false,
-        newSystemFromXML: true
+        newSystemFromXML: true,
+        stretchLastSystemLine: true // AQUESTA ÉS LA SOLUCIÓ NATIVA
       }});
-      // Petit truc per forçar que el segon pentagrama s'estiri una mica més
-      osmd.EngravingRules.PageLeftMargin = 2.0;
-      osmd.EngravingRules.PageRightMargin = 2.0;
       
       osmd.load({xml_escapat}).then(function() {{
         osmd.render();
