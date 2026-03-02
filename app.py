@@ -39,6 +39,32 @@ def ajustar_notes(pitch_obj, escala_dict):
     else:
         pitch_obj.accidental = pitch.Accidental(alteracio)
 
+def mostrar_partitura(xml_bytes):
+    # Convertim els bytes a text
+    xml_str = xml_bytes.decode('utf-8')
+    # Utilitzem json.dumps per escapar cometes i salts de línia de forma segura per a JavaScript
+    xml_escapat = json.dumps(xml_str)
+    
+    # Codi HTML/JS que carrega OpenSheetMusicDisplay
+    html_code = f"""
+    <div id="osmdCanvas"></div>
+    <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.8.8/build/opensheetmusicdisplay.min.js"></script>
+    <script>
+      var osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay("osmdCanvas", {{
+        autoResize: true,
+        backend: "svg",
+        drawTitle: false // Amaguem el títol intern per no duplicar-lo
+      }});
+      
+      // Carreguem l'XML generat i el dibuixem
+      osmd.load({xml_escapat}).then(function() {{
+        osmd.render();
+      }});
+    </script>
+    """
+    # Mostrem el bloc a Streamlit amb una alçada generosa
+    components.html(html_code, height=750, scrolling=True)
+
 # --- LÒGICA PRINCIPAL (Adaptada per a web) ---
 def generar_estudi_web():
     # Busquem els arxius a la carpeta arrel del GitHub
@@ -167,13 +193,20 @@ if st.button('Generar nova lectura a vista'):
             st.success("✨ Estudi generat amb èxit!")
             st.info(f"🎵 **Tonalitat:** {tonalitat.replace('-', 'b')} Major")
             
-            # 3. Preparem l'arxiu per baixar-lo
+            # 3. Preparem l'arxiu
             path_temporal = score_final.write('musicxml')
             with open(path_temporal, 'rb') as f:
                 xml_data = f.read()
-                
+            
+            # --- NOU: MOSTREM LA PARTITURA A LA WEB ---
+            st.divider()  # Una línia separadora per fer-ho bonic
+            st.subheader("Visualització de l'estudi")
+            mostrar_partitura(xml_data)
+            # ------------------------------------------
+
+            # 4. Botó de descàrrega a sota del visor
             st.download_button(
-                label="📥 Descarregar Partitura (MusicXML)",
+                label="📥 Descarregar Partitura per a MuseScore (MusicXML)",
                 data=xml_data,
                 file_name="Estudi_Lectura_Vista.musicxml",
                 mime="application/vnd.recordare.musicxml+xml"
