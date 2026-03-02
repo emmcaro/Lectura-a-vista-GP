@@ -10,6 +10,7 @@ from music21 import *
 warnings.filterwarnings("ignore")
 
 # --- CONFIGURACIÓ DE STREAMLIT ---
+# Fixem el "wide" perquè la partitura es vegi gran a tota la pantalla
 st.set_page_config(page_title="Generador d'Estudis", layout="wide")
 st.title("🎵 Generador de Lectura a Vista")
 st.write("Clica el botó per generar un nou estudi a l'atzar i llegir-lo directament des d'aquí.")
@@ -40,13 +41,11 @@ def ajustar_notes(pitch_obj, escala_dict):
         pitch_obj.accidental = pitch.Accidental(alteracio)
 
 # --- FUNCIÓ DEL VISOR (OSMD) ---
-# --- FUNCIÓ DEL VISOR (OSMD) ---
 def mostrar_partitura(xml_bytes):
     xml_str = xml_bytes.decode('utf-8')
     xml_escapat = json.dumps(xml_str)
     html_code = f"""
     <style>
-      /* Això crea un "full de paper" blanc perquè el mode fosc no amagui les notes */
       body {{ background-color: #FFFFFF; margin: 0; padding: 15px; border-radius: 8px; }}
     </style>
     <div id="osmdCanvas"></div>
@@ -58,16 +57,14 @@ def mostrar_partitura(xml_bytes):
         drawTitle: false,
         drawComposer: false, 
         drawPartNames: false,
-        newSystemFromXML: true // <-- Això força els 4 compassos per línia!
+        newSystemFromXML: true
       }});
       osmd.load({xml_escapat}).then(function() {{
         osmd.render();
       }});
     </script>
     """
-    # Hem ajustat l'alçada a 500 perquè en ser més ample ja no necessita tant d'espai vertical
     components.html(html_code, height=500, scrolling=True)
-    components.html(html_code, height=600, scrolling=True)
 
 # --- LÒGICA PRINCIPAL ---
 def generar_estudi_web():
@@ -105,7 +102,6 @@ def generar_estudi_web():
     ]
     progressio = random.choice(progressions_possibles)
     
-    # Creem l'arxiu i netegem metadades (per no tenir Títol ni Autor)
     score_out = stream.Score()
     score_out.metadata = metadata.Metadata()
     score_out.metadata.title = ""
@@ -113,8 +109,6 @@ def generar_estudi_web():
     
     part_d = stream.Part()
     part_e = stream.Part()
-    
-    # Netegem el nom de l'instrument a cada partitura
     part_d.partName = ""
     part_e.partName = ""
     
@@ -138,11 +132,11 @@ def generar_estudi_web():
             c_d.number = c_e.number = i + 1
             
         for c in [c_d, c_e]:
+            # Aquí esborrem també qualsevol Barline original (soluciona la doble barra al c.7)
             for cl in ['KeySignature', 'TimeSignature', 'Clef', 'SystemLayout', 'PageLayout', 'Barline']:
                 c.removeByClass(cl)
                 
         if i < 7:
-            # Correcció de l'ordre (per arreglar el Bdim)
             arrel_str = acord.replace('maj7','').replace('dim','').replace('m7','').replace('m','').replace('7','')
             itvl = interval.Interval(pitch.Pitch('C4'), pitch.Pitch(arrel_str + '4'))
             c_d.transpose(itvl, inPlace=True)
@@ -160,7 +154,6 @@ def generar_estudi_web():
                 c_act = sum(p.ps for p in notes_d) / len(notes_d)
                 if centre_previ is not None:
                     diff = centre_previ - c_act
-                    # Correcció per evitar els missatges "NULL" de Streamlit
                     if diff >= 7: 
                         for p in notes_d: p.octave += 1
                     elif diff <= -7: 
@@ -172,7 +165,6 @@ def generar_estudi_web():
 
             notes_e = [p for n in c_e.flatten().notes for p in (n.pitches if n.isChord else [n.pitch])]
             if notes_e:
-                # Correcció per evitar els missatges "NULL" de Streamlit
                 while max(p.ps for p in notes_e) > lh_max: 
                     for p in notes_e: p.octave -= 1
                 while min(p.ps for p in notes_e) < lh_min: 
@@ -186,42 +178,35 @@ def generar_estudi_web():
         part_d.append(c_d)
         part_e.append(c_e)
         
-    # Unim els pentagrames, però deixem el nom de l'instrument buit (name='')
     grup_piano = layout.StaffGroup([part_d, part_e], name='', symbol='brace', barTogether=True)
     score_out.insert(0, part_d); score_out.insert(0, part_e); score_out.insert(0, grup_piano)
     
     if tonalitat_desti != 'C':
         score_out.transpose(itvl_transp, inPlace=True)
         
+    # --- FIX DE LES PLIQUES ---
     for element in score_out.flatten().notes:
-        element.stemDirection = 'unspecified' 
-        element.beams.clear()  # <-- AIXÒ NETEJARÀ LES PLIQUES
+        element.stemDirection = 'unspecified'
+        # Buidem la llista interna de beams (barres d'agrupació) de forma segura
+        if hasattr(element, 'beams'):
+            element.beams.beamList = []
         
-    # Ara només retornem la partitura i la tonalitat
     return score_out, tonalitat_desti
 
 # --- INTERFÍCIE D'USUARI ---
+# Ara només hi ha un sol bloc per evitar repeticions a la pantalla i sense missatges d'èxit/tonalitat
 if st.button('Generar nova lectura a vista'):
     with st.spinner('Creant la partitura...'):
         try:
-            # 1. Cridem la funció principal
             score_final, tonalitat = generar_estudi_web()
             
-            # 2. Mostrem l'èxit i només la Tonalitat
-            st.success("✨ Estudi generat amb èxit!")
-            st.info(f"🎵 **Tonalitat:** {tonalitat.replace('-', 'b')} Major")
-            
-            # 3. Preparem l'arxiu en segon pla
             path_temporal = score_final.write('musicxml')
             with open(path_temporal, 'rb') as f:
                 xml_data = f.read()
             
-            # 4. Mostrem el visor OSMD incrustat
             st.divider()
-            st.subheader("Visualització de l'estudi")
             mostrar_partitura(xml_data)
             
-            # 5. Botó de descàrrega
             st.download_button(
                 label="📥 Descarregar Partitura per a MuseScore (MusicXML)",
                 data=xml_data,
