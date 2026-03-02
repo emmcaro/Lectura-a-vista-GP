@@ -182,14 +182,16 @@ def generar_estudi_web():
     if tonalitat_desti != 'C':
         score_out.transpose(itvl_transp, inPlace=True)
         
-    # --- FIX DE LES PLIQUES ---
+   # --- FIX DE LES PLIQUES ---
+    # Primer netegem les direccions de les pliques i els grups antics
     for element in score_out.flatten().notes:
         element.stemDirection = 'unspecified'
         if hasattr(element, 'beams'):
-            element.beams = beam.Beams() # L'assignem a un objecte de la classe correcte, buit.
+            element.beams = beam.Beams()
             
-    # Forcem a que recalcoli totes les agrupacions amb la lògica estàndard
-    score_out.makeBeams(inPlace=True)
+    # Ara forcem que es recalculin les pliques, però només a dins dels pentagrames (Parts)
+    for p in score_out.getElementsByClass(stream.Part):
+        p.makeBeams(inPlace=True)
         
     return score_out, tonalitat_desti
 
