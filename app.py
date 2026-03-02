@@ -134,7 +134,8 @@ def generar_estudi_web():
             for cl in ['KeySignature', 'TimeSignature', 'Clef', 'SystemLayout', 'PageLayout', 'Barline']:
                 c.removeByClass(cl)
                 
-        if i < 7:
+        # Transportem NOMÉS els compassos de l'1 al 6 (el 7 ja és la dominant correcta!)
+        if i < 6:
             arrel_str = acord.replace('maj7','').replace('dim','').replace('m7','').replace('m','').replace('7','')
             itvl = interval.Interval(pitch.Pitch('C4'), pitch.Pitch(arrel_str + '4'))
             c_d.transpose(itvl, inPlace=True)
@@ -147,6 +148,8 @@ def generar_estudi_web():
                     elif element.isChord:
                         for p in element.pitches: ajustar_notes(p, escala_correcta)
 
+        # Les octaves i els límits de distància els apliquem als compassos de l'1 al 7
+        if i < 7:
             notes_d = [p for n in c_d.flatten().notes for p in (n.pitches if n.isChord else [n.pitch])]
             if notes_d:
                 c_act = sum(p.ps for p in notes_d) / len(notes_d)
@@ -168,6 +171,25 @@ def generar_estudi_web():
                 while min(p.ps for p in notes_e) < lh_min: 
                     for p in notes_e: p.octave += 1
 
+            # NOU: Limitació de Desena Major (16 semitons) entre mans
+            if notes_d and notes_e:
+                intents = 0
+                while intents < 3: # Limitem els intents per evitar bucles infinits
+                    min_ps_d = min(p.ps for p in notes_d)
+                    max_ps_e = max(p.ps for p in notes_e)
+                    
+                    if (min_ps_d - max_ps_e) <= 16:
+                        break # Distància correcta
+                        
+                    # Estan massa lluny: decidim si pugem esquerra o baixem dreta
+                    if max_ps_e + 12 <= lh_max:
+                        for p in notes_e: p.octave += 1
+                    elif min_ps_d - 12 >= rh_min:
+                        for p in notes_d: p.octave -= 1
+                    else:
+                        for p in notes_d: p.octave -= 1
+                    intents += 1
+
         if i == 0:
             c_d.insert(0, clef.TrebleClef()); c_d.insert(0, meter.TimeSignature('4/4')); c_d.insert(0, key.Key('C'))
             c_e.insert(0, clef.BassClef()); c_e.insert(0, meter.TimeSignature('4/4')); c_e.insert(0, key.Key('C'))
@@ -182,11 +204,24 @@ def generar_estudi_web():
     if tonalitat_desti != 'C':
         score_out.transpose(itvl_transp, inPlace=True)
         
-   # --- FIX DE LES PLIQUES ---
-    # Netejem qualsevol direcció forçada i deixem els grups (beams) tal qual
-    for element in score_out.flatten().notes:
-        element.stemDirection = 'unspecified'
-            
+    # --- ESCOMBRATGE PROFUND DE PLIQUES ---
+    for element in score_out.flatten().notesAndRests:
+        # 1. Esborrem de l'element principal (Nota o Acord sencer)
+        if hasattr(element, 'stemDirection'):
+            element.stemDirection = 'unspecified'
+        if hasattr(element, 'style') and element.style is not None:
+            if hasattr(element.style, 'stemDirection'):
+                element.style.stemDirection = 'unspecified'
+                
+        # 2. Esborrem a fons DINS de l'acord (cada nota individual oculta la seva plica)
+        if element.isChord:
+            for n in element.notes:
+                if hasattr(n, 'stemDirection'):
+                    n.stemDirection = 'unspecified'
+                if hasattr(n, 'style') and n.style is not None:
+                    if hasattr(n.style, 'stemDirection'):
+                        n.style.stemDirection = 'unspecified'
+                        
     return score_out, tonalitat_desti
 
 # --- INTERFÍCIE D'USUARI ---
