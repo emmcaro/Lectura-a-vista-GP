@@ -24,7 +24,7 @@ alteracions_acords = {
     'Dm': {'C': None, 'D': None, 'E': None, 'F': None, 'G': None, 'A': None, 'B': None},
     'Em': {'C': None, 'D': None, 'E': None, 'F': None, 'G': None, 'A': None, 'B': None},
     'F': {'C': None, 'D': None, 'E': None, 'F': None, 'G': None, 'A': None, 'B': None},
-    'Fm': {'C': None, 'D': None, 'E': None, 'F': None, 'G': None, 'A': 'flat', 'B': None}, # Nou acord afegit
+    'Fm': {'C': None, 'D': None, 'E': None, 'F': None, 'G': None, 'A': 'flat', 'B': None},
     'G': {'C': None, 'D': None, 'E': None, 'F': None, 'G': None, 'A': None, 'B': None},
     'Am': {'C': None, 'D': None, 'E': None, 'F': None, 'G': None, 'A': None, 'B': None},
     'Bdim': {'C': None, 'D': None, 'E': None, 'F': None, 'G': None, 'A': None, 'B': None},
@@ -76,7 +76,7 @@ def generar_estudi_web():
     ruta_compas7 = 'compas7.musicxml'
     
     if not os.path.exists(ruta_entrada) or not os.path.exists(ruta_compas7):
-        raise FileNotFoundError("❌ No s'han trobat els arxius .musicxml base a GitHub.")
+        raise FileNotFoundError("❌ No s'han trobat els arxius .musicxml base.")
 
     score_in = converter.parse(ruta_entrada)
     parts_in = score_in.getElementsByClass(stream.Part)
@@ -104,15 +104,15 @@ def generar_estudi_web():
         ['Cmaj7', 'A7', 'Dm7', 'F', 'C', 'Dm', 'G7', 'C'],
         ['C', 'E7', 'Am', 'C7', 'F', 'Dm7', 'G7', 'C'],
         ['C', 'F', 'Bdim', 'E7', 'Am', 'D7', 'G7', 'C'],
-        # Les 10 noves
-        ['C', 'G', 'Am', 'F', 'C', 'G', 'F', 'C'],
+        # Les 10 noves adaptades (La 1 i la 8 ara tenen G7 al compàs 7)
+        ['C', 'G', 'Am', 'F', 'C', 'G', 'G7', 'C'],
         ['C', 'Am', 'F', 'G', 'C', 'Am', 'G7', 'C'],
         ['C', 'G', 'Am', 'Em', 'F', 'C', 'G7', 'C'],
         ['C', 'C7', 'F', 'D7', 'G', 'Am', 'G7', 'C'],
         ['C', 'F', 'Bdim', 'Em', 'Am', 'Dm7', 'G7', 'C'],
         ['C', 'Dm', 'Em', 'F', 'C', 'D7', 'G7', 'C'],
         ['C', 'G', 'Am', 'E7', 'F', 'C', 'G7', 'C'],
-        ['Cmaj7', 'Am', 'Dm7', 'G7', 'Em', 'A7', 'Dm7', 'C'],
+        ['Cmaj7', 'Am', 'Dm7', 'G7', 'Em', 'A7', 'G7', 'C'],
         ['C', 'C7', 'F', 'Fm', 'C', 'Am', 'G7', 'C'],
         ['C', 'Em', 'F', 'G', 'Am', 'D7', 'G7', 'C']
     ]
@@ -128,7 +128,6 @@ def generar_estudi_web():
     part_d.partName = ""
     part_e.partName = ""
     
-    # Variables per fer el seguiment independent de cada mà
     centre_previ_d = None 
     centre_previ_e = None
     
@@ -142,60 +141,18 @@ def generar_estudi_web():
     max_ps_dreta_c7 = 72
     
     for i, acord in enumerate(progressio):
-        # COMPÀS 8 (Cadència Final)
-        if i == 7:
-            c_d, c_e = stream.Measure(number=8), stream.Measure(number=8)
+        
+        # --- CAS 1: COMPASSOS 1 AL 6 ---
+        if i < 6:
+            idx = random.randint(0, len(compassos_dreta) - 1)
+            c_d = copy.deepcopy(compassos_dreta[idx])
+            c_e = copy.deepcopy(compassos_esquerra[idx])
+            c_d.number = c_e.number = i + 1
             
-            valid_chords = []
-            fallback_chords = []
-            center_c7 = (min_ps_dreta_c7 + max_ps_dreta_c7) / 2.0
-            
-            for base_notes in acords_finals_dreta:
-                for octave_shift in range(-3, 4):
-                    ch = chord.Chord(base_notes, quarterLength=4.0)
-                    for p in ch.pitches: p.octave += octave_shift
-                    
-                    min_chord = min(p.ps for p in ch.pitches)
-                    max_chord = max(p.ps for p in ch.pitches)
-                    center_chord = sum(p.ps for p in ch.pitches) / len(ch.pitches)
-                    
-                    fallback_chords.append((ch, abs(center_chord - center_c7)))
-                    if min_chord >= min_ps_dreta_c7 and max_chord <= max_ps_dreta_c7:
-                        valid_chords.append(ch)
-                        
-            if valid_chords:
-                ch_d = random.choice(valid_chords)
-            else:
-                fallback_chords = sorted(fallback_chords, key=lambda x: x[1])
-                ch_d = random.choice([fallback_chords[0][0], fallback_chords[1][0]])
-                
-            c_d.append(ch_d)
-            
-            notes_e_final = random.choice(acords_finals_esquerra)
-            c_e.append(chord.Chord(notes_e_final, quarterLength=4.0))
-            
-            c_d.rightBarline = bar.Barline('final')
-            c_e.rightBarline = bar.Barline('final')
-            
-        else:
-            # Selecció dels compassos
-            if i == 6:
-                idx7 = random.randint(0, len(m7_dreta) - 1)
-                c_d = copy.deepcopy(m7_dreta[idx7])
-                c_e = copy.deepcopy(m7_esquerra[idx7])
-                c_d.number = c_e.number = 7
-            else:
-                idx = random.randint(0, len(compassos_dreta) - 1)
-                c_d = copy.deepcopy(compassos_dreta[idx])
-                c_e = copy.deepcopy(compassos_esquerra[idx])
-                c_d.number = c_e.number = i + 1
-                
             for c in [c_d, c_e]:
                 for cl in ['KeySignature', 'TimeSignature', 'Clef', 'SystemLayout', 'PageLayout', 'Barline']:
                     c.removeByClass(cl)
-                
-        # Transposició i ajustament d'alteracions (Compassos 1-7)
-        if i < 7:
+                    
             arrel_str = acord.replace('maj7','').replace('dim','').replace('m7','').replace('m','').replace('7','')
             itvl = interval.Interval(pitch.Pitch('C4'), pitch.Pitch(arrel_str + '4'))
             c_d.transpose(itvl, inPlace=True)
@@ -207,9 +164,8 @@ def generar_estudi_web():
                     if element.isNote: ajustar_notes(element.pitch, escala_correcta)
                     elif element.isChord:
                         for p in element.pitches: ajustar_notes(p, escala_correcta)
-
-        # GESTIÓ DELS COMPASSOS 1 AL 6
-        if i < 6:
+            
+            # Ajust octaves
             notes_d = [p for n in c_d.flatten().notes for p in (n.pitches if n.isChord else [n.pitch])]
             if notes_d:
                 c_act_d = sum(p.ps for p in notes_d) / len(notes_d)
@@ -219,7 +175,6 @@ def generar_estudi_web():
                         for p in notes_d: p.octave += 1
                     elif diff <= -7: 
                         for p in notes_d: p.octave -= 1
-                
                 for p in notes_d:
                     while p.ps < rh_min: p.octave += 1
                     while p.ps > rh_max: p.octave -= 1
@@ -234,7 +189,6 @@ def generar_estudi_web():
                         for p in notes_e: p.octave += 1
                     elif diff <= -7:
                         for p in notes_e: p.octave -= 1
-                
                 for p in notes_e:
                     while p.ps > lh_max: p.octave -= 1
                     while p.ps < lh_min: p.octave += 1
@@ -254,8 +208,29 @@ def generar_estudi_web():
                         for p in notes_d: p.octave -= 1
                     intents += 1
 
-        # GESTIÓ ESPECÍFICA DEL COMPÀS 7 (Independitzat per mans)
+        # --- CAS 2: COMPÀS 7 ---
         elif i == 6:
+            idx7 = random.randint(0, len(m7_dreta) - 1)
+            c_d = copy.deepcopy(m7_dreta[idx7])
+            c_e = copy.deepcopy(m7_esquerra[idx7])
+            c_d.number = c_e.number = 7
+            
+            for c in [c_d, c_e]:
+                for cl in ['KeySignature', 'TimeSignature', 'Clef', 'SystemLayout', 'PageLayout', 'Barline']:
+                    c.removeByClass(cl)
+                    
+            arrel_str = acord.replace('maj7','').replace('dim','').replace('m7','').replace('m','').replace('7','')
+            itvl = interval.Interval(pitch.Pitch('C4'), pitch.Pitch(arrel_str + '4'))
+            c_d.transpose(itvl, inPlace=True)
+            c_e.transpose(itvl, inPlace=True)
+            
+            escala_correcta = alteracions_acords[acord]
+            for compas in [c_d, c_e]:
+                for element in compas.flatten().notes:
+                    if element.isNote: ajustar_notes(element.pitch, escala_correcta)
+                    elif element.isChord:
+                        for p in element.pitches: ajustar_notes(p, escala_correcta)
+
             notes_d = [p for n in c_d.flatten().notes for p in (n.pitches if n.isChord else [n.pitch])]
             if notes_d:
                 min_linies_d = float('inf')
@@ -297,7 +272,42 @@ def generar_estudi_web():
                     shift_final_e = random.choice(millors_shifts_e)
                 for p in notes_e: p.octave += shift_final_e
 
-        # Ajustaments de disseny i partitura
+        # --- CAS 3: COMPÀS 8 (Cadència Final) ---
+        elif i == 7:
+            c_d, c_e = stream.Measure(number=8), stream.Measure(number=8)
+            
+            valid_chords = []
+            fallback_chords = []
+            center_c7 = (min_ps_dreta_c7 + max_ps_dreta_c7) / 2.0
+            
+            for base_notes in acords_finals_dreta:
+                for octave_shift in range(-3, 4):
+                    ch = chord.Chord(base_notes, quarterLength=4.0)
+                    for p in ch.pitches: p.octave += octave_shift
+                    
+                    min_chord = min(p.ps for p in ch.pitches)
+                    max_chord = max(p.ps for p in ch.pitches)
+                    center_chord = sum(p.ps for p in ch.pitches) / len(ch.pitches)
+                    
+                    fallback_chords.append((ch, abs(center_chord - center_c7)))
+                    if min_chord >= min_ps_dreta_c7 and max_chord <= max_ps_dreta_c7:
+                        valid_chords.append(ch)
+                        
+            if valid_chords:
+                ch_d = random.choice(valid_chords)
+            else:
+                fallback_chords = sorted(fallback_chords, key=lambda x: x[1])
+                ch_d = random.choice([fallback_chords[0][0], fallback_chords[1][0]])
+                
+            c_d.append(ch_d)
+            
+            notes_e_final = random.choice(acords_finals_esquerra)
+            c_e.append(chord.Chord(notes_e_final, quarterLength=4.0))
+            
+            c_d.rightBarline = bar.Barline('final')
+            c_e.rightBarline = bar.Barline('final')
+
+        # Formateig inicial
         if i == 0:
             c_d.insert(0, clef.TrebleClef()); c_d.insert(0, meter.TimeSignature('4/4')); c_d.insert(0, key.Key('C'))
             c_e.insert(0, clef.BassClef()); c_e.insert(0, meter.TimeSignature('4/4')); c_e.insert(0, key.Key('C'))
@@ -309,6 +319,7 @@ def generar_estudi_web():
     grup_piano = layout.StaffGroup([part_d, part_e], name='', symbol='brace', barTogether=True)
     score_out.insert(0, part_d); score_out.insert(0, part_e); score_out.insert(0, grup_piano)
     
+    # Única transposició final cap a la tonalitat de destí
     if tonalitat_desti != 'C':
         score_out.transpose(itvl_transp, inPlace=True)
         
