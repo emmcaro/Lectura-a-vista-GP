@@ -132,42 +132,48 @@ def generar_estudi_web():
         ['C2', 'G2', 'C3']          
     ]
     
-    # Memòria per enllaçar el compàs 8 amb l'última nota del compàs 7
-    ultim_ps_dreta = 60
-    ultim_ps_esquerra = 48
+    # Inicialitzem els límits del compàs 7 amb valors per defecte
+    min_ps_dreta_c7 = 60
+    max_ps_dreta_c7 = 72
     
     for i, acord in enumerate(progressio):
         if i == 7:
             c_d, c_e = stream.Measure(number=8), stream.Measure(number=8)
             
-            # --- CÀLCUL INTEL·LIGENT DE L'ACORD FINAL (MÀ DRETA) ---
-            opcions_final_d = []
+            # --- CÀLCUL INTEL·LIGENT DE L'ACORD FINAL DINS DE L'ÀMBIT (MÀ DRETA) ---
+            valid_chords = []
+            fallback_chords = []
+            center_c7 = (min_ps_dreta_c7 + max_ps_dreta_c7) / 2.0
+            
             for base_notes in acords_finals_dreta:
-                ch = chord.Chord(base_notes, quarterLength=4.0)
-                centre_base = sum(p.ps for p in ch.pitches) / len(ch.pitches)
-                # Calculem quantes octaves l'hem de moure per acostar-lo al final del c7
-                octave_shift = round((ultim_ps_dreta - centre_base) / 12.0)
-                for p in ch.pitches: p.octave += int(octave_shift)
-                opcions_final_d.append(ch)
+                # Provem l'acord en diferents octaves (-3 a +3 respecte l'original)
+                for octave_shift in range(-3, 4):
+                    ch = chord.Chord(base_notes, quarterLength=4.0)
+                    for p in ch.pitches: p.octave += octave_shift
+                    
+                    min_chord = min(p.ps for p in ch.pitches)
+                    max_chord = max(p.ps for p in ch.pitches)
+                    center_chord = sum(p.ps for p in ch.pitches) / len(ch.pitches)
+                    
+                    fallback_chords.append((ch, abs(center_chord - center_c7)))
+                    
+                    # Si l'acord encaixa perfectament dins de l'àmbit del c7, el guardem com a vàlid
+                    if min_chord >= min_ps_dreta_c7 and max_chord <= max_ps_dreta_c7:
+                        valid_chords.append(ch)
+                        
+            if valid_chords:
+                ch_d = random.choice(valid_chords)
+            else:
+                # Si no hi cabia cap acord, agafem el que quedi més ben centrat respecte a l'àmbit
+                fallback_chords = sorted(fallback_chords, key=lambda x: x[1])
+                ch_d = random.choice([fallback_chords[0][0], fallback_chords[1][0]])
                 
-            # Ordenem les opcions segons la distància real amb l'última nota
-            opcions_final_d = sorted(opcions_final_d, key=lambda ch: abs((sum(p.ps for p in ch.pitches) / len(ch.pitches)) - ultim_ps_dreta))
-            # Agafem un dels 2 acords / inversions que lliguen millor
-            ch_d = random.choice(opcions_final_d[:2])
             c_d.append(ch_d)
             
-            # --- CÀLCUL INTEL·LIGENT DE L'ACORD FINAL (MÀ ESQUERRA) ---
-            opcions_final_e = []
-            for base_notes in acords_finals_esquerra:
-                ch = chord.Chord(base_notes, quarterLength=4.0)
-                centre_base = sum(p.ps for p in ch.pitches) / len(ch.pitches)
-                octave_shift = round((ultim_ps_esquerra - centre_base) / 12.0)
-                for p in ch.pitches: p.octave += int(octave_shift)
-                opcions_final_e.append(ch)
-                
-            opcions_final_e = sorted(opcions_final_e, key=lambda ch: abs((sum(p.ps for p in ch.pitches) / len(ch.pitches)) - ultim_ps_esquerra))
-            ch_e = random.choice(opcions_final_e[:2])
-            c_e.append(ch_e)
+            # --- MÀ ESQUERRA (Només atzar bàsic) ---
+            # Ja no busquem l'última nota, simplement agafem un acord greu per defecte
+            notes_e_final = random.choice(acords_finals_esquerra)
+            c_e.append(chord.Chord(notes_e_final, quarterLength=4.0))
             
             c_d.rightBarline = bar.Barline('final')
             c_e.rightBarline = bar.Barline('final')
@@ -205,7 +211,6 @@ def generar_estudi_web():
             notes_d = [p for n in c_d.flatten().notes for p in (n.pitches if n.isChord else [n.pitch])]
             if notes_d:
                 c_act = sum(p.ps for p in notes_d) / len(notes_d)
-                # Bloc shift: connecta la melodia suament, SÍ afecta el compàs 7
                 if centre_previ is not None:
                     diff = centre_previ - c_act
                     if diff >= 7: 
@@ -213,7 +218,6 @@ def generar_estudi_web():
                     elif diff <= -7: 
                         for p in notes_d: p.octave -= 1
                 
-                # NOMÉS apliquem els límits extrems als c. 1 al 6 (el 7 es queda lliure)
                 if i < 6:
                     for p in notes_d:
                         while p.ps < rh_min: p.octave += 1
@@ -228,7 +232,6 @@ def generar_estudi_web():
                     while min(p.ps for p in notes_e) < lh_min: 
                         for p in notes_e: p.octave += 1
 
-            # Límits de distància (desena major) només aplicats als c. 1 al 6
             if i < 6:
                 if notes_d and notes_e:
                     intents = 0
@@ -247,10 +250,11 @@ def generar_estudi_web():
                             for p in notes_d: p.octave -= 1
                         intents += 1
 
-            # Quan arribem al final del compàs 7, capturem l'última nota per al c.8
+            # Quan processem el compàs 7, analitzem quina és la nota més greu i la més aguda de la mà dreta
             if i == 6:
-                if notes_d: ultim_ps_dreta = notes_d[-1].ps
-                if notes_e: ultim_ps_esquerra = notes_e[-1].ps
+                if notes_d:
+                    min_ps_dreta_c7 = min(p.ps for p in notes_d)
+                    max_ps_dreta_c7 = max(p.ps for p in notes_d)
 
         if i == 0:
             c_d.insert(0, clef.TrebleClef()); c_d.insert(0, meter.TimeSignature('4/4')); c_d.insert(0, key.Key('C'))
