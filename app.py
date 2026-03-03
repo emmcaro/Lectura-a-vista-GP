@@ -43,7 +43,6 @@ def ajustar_notes(pitch_obj, escala_dict):
     else:
         pitch_obj.accidental = pitch.Accidental(alteracio)
 
-# --- FUNCIÓ DEL VISOR (OSMD) ---
 def mostrar_partitura(xml_bytes):
     xml_str = xml_bytes.decode('utf-8')
     xml_escapat = json.dumps(xml_str)
@@ -119,20 +118,11 @@ def generar_estudi_web():
     centre_previ = None 
     
     acords_finals_dreta = [
-        ['C4', 'E4', 'G4'],         
-        ['E4', 'G4', 'C5'],         
-        ['G3', 'C4', 'E4'],         
-        ['C4', 'E4', 'G4', 'B4'],   
-        ['E4', 'G4', 'B4', 'C5'],   
-        ['G3', 'B3', 'C4', 'E4']    
+        ['C4', 'E4', 'G4'], ['E4', 'G4', 'C5'], ['G3', 'C4', 'E4'],         
+        ['C4', 'E4', 'G4', 'B4'], ['E4', 'G4', 'B4', 'C5'], ['G3', 'B3', 'C4', 'E4']    
     ]
-    acords_finals_esquerra = [
-        ['C2', 'C3'],               
-        ['C3', 'G3'],               
-        ['C2', 'G2', 'C3']          
-    ]
+    acords_finals_esquerra = [['C2', 'C3'], ['C3', 'G3'], ['C2', 'G2', 'C3']]
     
-    # Inicialitzem els límits del compàs 7 amb valors per defecte
     min_ps_dreta_c7 = 60
     max_ps_dreta_c7 = 72
     
@@ -140,13 +130,12 @@ def generar_estudi_web():
         if i == 7:
             c_d, c_e = stream.Measure(number=8), stream.Measure(number=8)
             
-            # --- CÀLCUL INTEL·LIGENT DE L'ACORD FINAL DINS DE L'ÀMBIT (MÀ DRETA) ---
+            # CÀLCUL COMPÀS 8 MÀ DRETA (Dins de l'àmbit del 7)
             valid_chords = []
             fallback_chords = []
             center_c7 = (min_ps_dreta_c7 + max_ps_dreta_c7) / 2.0
             
             for base_notes in acords_finals_dreta:
-                # Provem l'acord en diferents octaves (-3 a +3 respecte l'original)
                 for octave_shift in range(-3, 4):
                     ch = chord.Chord(base_notes, quarterLength=4.0)
                     for p in ch.pitches: p.octave += octave_shift
@@ -156,22 +145,18 @@ def generar_estudi_web():
                     center_chord = sum(p.ps for p in ch.pitches) / len(ch.pitches)
                     
                     fallback_chords.append((ch, abs(center_chord - center_c7)))
-                    
-                    # Si l'acord encaixa perfectament dins de l'àmbit del c7, el guardem com a vàlid
                     if min_chord >= min_ps_dreta_c7 and max_chord <= max_ps_dreta_c7:
                         valid_chords.append(ch)
                         
             if valid_chords:
                 ch_d = random.choice(valid_chords)
             else:
-                # Si no hi cabia cap acord, agafem el que quedi més ben centrat respecte a l'àmbit
                 fallback_chords = sorted(fallback_chords, key=lambda x: x[1])
                 ch_d = random.choice([fallback_chords[0][0], fallback_chords[1][0]])
                 
             c_d.append(ch_d)
             
-            # --- MÀ ESQUERRA (Només atzar bàsic) ---
-            # Ja no busquem l'última nota, simplement agafem un acord greu per defecte
+            # CÀLCUL COMPÀS 8 MÀ ESQUERRA
             notes_e_final = random.choice(acords_finals_esquerra)
             c_e.append(chord.Chord(notes_e_final, quarterLength=4.0))
             
@@ -207,7 +192,8 @@ def generar_estudi_web():
                     elif element.isChord:
                         for p in element.pitches: ajustar_notes(p, escala_correcta)
 
-        if i < 7:
+        # GESTIÓ DELS COMPASSOS 1 AL 6
+        if i < 6:
             notes_d = [p for n in c_d.flatten().notes for p in (n.pitches if n.isChord else [n.pitch])]
             if notes_d:
                 c_act = sum(p.ps for p in notes_d) / len(notes_d)
@@ -218,43 +204,75 @@ def generar_estudi_web():
                     elif diff <= -7: 
                         for p in notes_d: p.octave -= 1
                 
-                if i < 6:
-                    for p in notes_d:
-                        while p.ps < rh_min: p.octave += 1
-                        while p.ps > rh_max: p.octave -= 1
+                for p in notes_d:
+                    while p.ps < rh_min: p.octave += 1
+                    while p.ps > rh_max: p.octave -= 1
                 centre_previ = sum(p.ps for p in notes_d) / len(notes_d)
 
             notes_e = [p for n in c_e.flatten().notes for p in (n.pitches if n.isChord else [n.pitch])]
             if notes_e:
-                if i < 6:
-                    while max(p.ps for p in notes_e) > lh_max: 
-                        for p in notes_e: p.octave -= 1
-                    while min(p.ps for p in notes_e) < lh_min: 
+                while max(p.ps for p in notes_e) > lh_max: 
+                    for p in notes_e: p.octave -= 1
+                while min(p.ps for p in notes_e) < lh_min: 
+                    for p in notes_e: p.octave += 1
+
+            if notes_d and notes_e:
+                intents = 0
+                while intents < 3: 
+                    min_ps_d = min(p.ps for p in notes_d)
+                    max_ps_e = max(p.ps for p in notes_e)
+                    if (min_ps_d - max_ps_e) <= 16: break 
+                    if max_ps_e + 12 <= lh_max:
                         for p in notes_e: p.octave += 1
+                    elif min_ps_d - 12 >= rh_min:
+                        for p in notes_d: p.octave -= 1
+                    else:
+                        for p in notes_d: p.octave -= 1
+                    intents += 1
 
-            if i < 6:
-                if notes_d and notes_e:
-                    intents = 0
-                    while intents < 3: 
-                        min_ps_d = min(p.ps for p in notes_d)
-                        max_ps_e = max(p.ps for p in notes_e)
+        # GESTIÓ ESPECÍFICA DEL COMPÀS 7 (Escala sense límits rígids, optimitzant lectura)
+        elif i == 6:
+            arrel_str = acord.replace('maj7','').replace('dim','').replace('m7','').replace('m','').replace('7','')
+            itvl = interval.Interval(pitch.Pitch('C4'), pitch.Pitch(arrel_str + '4'))
+            c_d.transpose(itvl, inPlace=True)
+            c_e.transpose(itvl, inPlace=True)
+            
+            escala_correcta = alteracions_acords[acord]
+            for compas in [c_d, c_e]:
+                for element in compas.flatten().notes:
+                    if element.isNote: ajustar_notes(element.pitch, escala_correcta)
+                    elif element.isChord:
+                        for p in element.pitches: ajustar_notes(p, escala_correcta)
                         
-                        if (min_ps_d - max_ps_e) <= 16:
-                            break 
-                            
-                        if max_ps_e + 12 <= lh_max:
-                            for p in notes_e: p.octave += 1
-                        elif min_ps_d - 12 >= rh_min:
-                            for p in notes_d: p.octave -= 1
-                        else:
-                            for p in notes_d: p.octave -= 1
-                        intents += 1
-
-            # Quan processem el compàs 7, analitzem quina és la nota més greu i la més aguda de la mà dreta
-            if i == 6:
-                if notes_d:
-                    min_ps_dreta_c7 = min(p.ps for p in notes_d)
-                    max_ps_dreta_c7 = max(p.ps for p in notes_d)
+            notes_d = [p for n in c_d.flatten().notes for p in (n.pitches if n.isChord else [n.pitch])]
+            if notes_d:
+                min_linies = float('inf')
+                millors_shifts = []
+                
+                # Busquem l'octava amb menys línies addicionals
+                for octave_shift in range(-3, 4):
+                    linies = 0
+                    for p in notes_d:
+                        ps_test = p.ps + (octave_shift * 12)
+                        if ps_test < 60: linies += (60 - ps_test) # Penalitza greus extrems
+                        elif ps_test > 81: linies += (ps_test - 81) # Penalitza aguts extrems
+                    
+                    if linies < min_linies:
+                        min_linies = linies
+                        millors_shifts = [octave_shift]
+                    elif linies == min_linies:
+                        millors_shifts.append(octave_shift)
+                
+                # Desempat: la que salti menys des de l'acord anterior
+                if centre_previ is not None:
+                    shift_final = min(millors_shifts, key=lambda s: abs((sum(p.ps + s*12 for p in notes_d)/len(notes_d)) - centre_previ))
+                else:
+                    shift_final = random.choice(millors_shifts)
+                    
+                for p in notes_d: p.octave += shift_final
+                
+                min_ps_dreta_c7 = min(p.ps for p in notes_d)
+                max_ps_dreta_c7 = max(p.ps for p in notes_d)
 
         if i == 0:
             c_d.insert(0, clef.TrebleClef()); c_d.insert(0, meter.TimeSignature('4/4')); c_d.insert(0, key.Key('C'))
@@ -271,25 +289,19 @@ def generar_estudi_web():
         score_out.transpose(itvl_transp, inPlace=True)
         
     for element in score_out.flatten().notesAndRests:
-        if hasattr(element, 'stemDirection'):
-            element.stemDirection = 'unspecified'
+        if hasattr(element, 'stemDirection'): element.stemDirection = 'unspecified'
         if hasattr(element, 'style') and element.style is not None:
-            if hasattr(element.style, 'stemDirection'):
-                element.style.stemDirection = 'unspecified'
-                
+            if hasattr(element.style, 'stemDirection'): element.style.stemDirection = 'unspecified'
         if element.isChord:
             for n in element.notes:
-                if hasattr(n, 'stemDirection'):
-                    n.stemDirection = 'unspecified'
+                if hasattr(n, 'stemDirection'): n.stemDirection = 'unspecified'
                 if hasattr(n, 'style') and n.style is not None:
-                    if hasattr(n.style, 'stemDirection'):
-                        n.style.stemDirection = 'unspecified'
+                    if hasattr(n.style, 'stemDirection'): n.style.stemDirection = 'unspecified'
                         
     return score_out, tonalitat_desti
 
 # --- INTERFÍCIE D'USUARI ---
 col1, col2 = st.columns([1, 1])
-
 with col1:
     if st.button('Generar nova lectura a vista', use_container_width=True):
         with st.spinner('Creant la partitura...'):
@@ -299,20 +311,17 @@ with col1:
                 with open(path_temporal, 'rb') as f:
                     st.session_state.xml_data = f.read()
                 st.session_state.score_generat = True
-            except FileNotFoundError as e:
-                st.error(str(e))
             except Exception as e:
-                st.error(f"S'ha produït un error inesperat: {e}")
+                st.error(f"S'ha produït un error: {e}")
 
 if st.session_state.score_generat:
     with col2:
         st.download_button(
-            label="📥 Descarregar Partitura per a MuseScore",
+            label="📥 Descarregar per MuseScore",
             data=st.session_state.xml_data,
-            file_name="Estudi_Lectura_Vista.musicxml",
+            file_name="Estudi.musicxml",
             mime="application/vnd.recordare.musicxml+xml",
             use_container_width=True
         )
-    
     st.divider()
     mostrar_partitura(st.session_state.xml_data)
