@@ -95,16 +95,18 @@ def generar_estudi_web():
     itvl_transp = interval.Interval(pitch.Pitch('C4'), pitch.Pitch(referencies[tonalitat_desti]))
     shift = itvl_transp.semitones
     
+    # Límits dinàmics per compensar la transposició final
     rh_min, rh_max = 55 - shift, 76 - shift
     lh_min, lh_max = 33 - shift, 50 - shift
+    
+    c7_rh_min, c7_rh_max = 60 - shift, 81 - shift
+    c7_lh_min, c7_lh_max = 40 - shift, 60 - shift
 
     progressions_possibles = [
-        # Les 4 originals
         ['C', 'Am', 'F', 'C', 'G', 'D7', 'G7', 'C'],
         ['Cmaj7', 'A7', 'Dm7', 'F', 'C', 'Dm', 'G7', 'C'],
         ['C', 'E7', 'Am', 'C7', 'F', 'Dm7', 'G7', 'C'],
         ['C', 'F', 'Bdim', 'E7', 'Am', 'D7', 'G7', 'C'],
-        # Les 10 noves adaptades (La 1 i la 8 ara tenen G7 al compàs 7)
         ['C', 'G', 'Am', 'F', 'C', 'G', 'G7', 'C'],
         ['C', 'Am', 'F', 'G', 'C', 'Am', 'G7', 'C'],
         ['C', 'G', 'Am', 'Em', 'F', 'C', 'G7', 'C'],
@@ -120,13 +122,9 @@ def generar_estudi_web():
     
     score_out = stream.Score()
     score_out.metadata = metadata.Metadata()
-    score_out.metadata.title = ""
-    score_out.metadata.composer = ""
     
-    part_d = stream.Part()
-    part_e = stream.Part()
-    part_d.partName = ""
-    part_e.partName = ""
+    part_d = stream.Part(); part_d.partName = ""
+    part_e = stream.Part(); part_e.partName = ""
     
     centre_previ_d = None 
     centre_previ_e = None
@@ -165,48 +163,47 @@ def generar_estudi_web():
                     elif element.isChord:
                         for p in element.pitches: ajustar_notes(p, escala_correcta)
             
-            # Ajust octaves
+            # Ajust Bloc Dreta
             notes_d = [p for n in c_d.flatten().notes for p in (n.pitches if n.isChord else [n.pitch])]
             if notes_d:
-                c_act_d = sum(p.ps for p in notes_d) / len(notes_d)
+                millors_shifts_d = []
+                min_penalty_d = float('inf')
+                for oct_shift in range(-4, 5):
+                    penalty = sum(max(0, rh_min - (p.ps + oct_shift*12)) + max(0, (p.ps + oct_shift*12) - rh_max) for p in notes_d)
+                    if penalty < min_penalty_d:
+                        min_penalty_d = penalty
+                        millors_shifts_d = [oct_shift]
+                    elif penalty == min_penalty_d:
+                        millors_shifts_d.append(oct_shift)
+                        
                 if centre_previ_d is not None:
-                    diff = centre_previ_d - c_act_d
-                    if diff >= 7: 
-                        for p in notes_d: p.octave += 1
-                    elif diff <= -7: 
-                        for p in notes_d: p.octave -= 1
-                for p in notes_d:
-                    while p.ps < rh_min: p.octave += 1
-                    while p.ps > rh_max: p.octave -= 1
+                    shift_final_d = min(millors_shifts_d, key=lambda s: abs((sum(p.ps + s*12 for p in notes_d)/len(notes_d)) - centre_previ_d))
+                else:
+                    shift_final_d = millors_shifts_d[0]
+                    
+                for p in notes_d: p.octave += shift_final_d
                 centre_previ_d = sum(p.ps for p in notes_d) / len(notes_d)
 
+            # Ajust Bloc Esquerra
             notes_e = [p for n in c_e.flatten().notes for p in (n.pitches if n.isChord else [n.pitch])]
             if notes_e:
-                c_act_e = sum(p.ps for p in notes_e) / len(notes_e)
+                millors_shifts_e = []
+                min_penalty_e = float('inf')
+                for oct_shift in range(-4, 5):
+                    penalty = sum(max(0, lh_min - (p.ps + oct_shift*12)) + max(0, (p.ps + oct_shift*12) - lh_max) for p in notes_e)
+                    if penalty < min_penalty_e:
+                        min_penalty_e = penalty
+                        millors_shifts_e = [oct_shift]
+                    elif penalty == min_penalty_e:
+                        millors_shifts_e.append(oct_shift)
+                        
                 if centre_previ_e is not None:
-                    diff = centre_previ_e - c_act_e
-                    if diff >= 7:
-                        for p in notes_e: p.octave += 1
-                    elif diff <= -7:
-                        for p in notes_e: p.octave -= 1
-                for p in notes_e:
-                    while p.ps > lh_max: p.octave -= 1
-                    while p.ps < lh_min: p.octave += 1
+                    shift_final_e = min(millors_shifts_e, key=lambda s: abs((sum(p.ps + s*12 for p in notes_e)/len(notes_e)) - centre_previ_e))
+                else:
+                    shift_final_e = millors_shifts_e[0]
+                    
+                for p in notes_e: p.octave += shift_final_e
                 centre_previ_e = sum(p.ps for p in notes_e) / len(notes_e)
-
-            if notes_d and notes_e:
-                intents = 0
-                while intents < 3: 
-                    min_ps_d = min(p.ps for p in notes_d)
-                    max_ps_e = max(p.ps for p in notes_e)
-                    if (min_ps_d - max_ps_e) <= 16: break 
-                    if max_ps_e + 12 <= lh_max:
-                        for p in notes_e: p.octave += 1
-                    elif min_ps_d - 12 >= rh_min:
-                        for p in notes_d: p.octave -= 1
-                    else:
-                        for p in notes_d: p.octave -= 1
-                    intents += 1
 
         # --- CAS 2: COMPÀS 7 ---
         elif i == 6:
@@ -231,45 +228,48 @@ def generar_estudi_web():
                     elif element.isChord:
                         for p in element.pitches: ajustar_notes(p, escala_correcta)
 
+            # Ajust Bloc Dreta (C7)
             notes_d = [p for n in c_d.flatten().notes for p in (n.pitches if n.isChord else [n.pitch])]
             if notes_d:
-                min_linies_d = float('inf')
                 millors_shifts_d = []
-                for octave_shift in range(-3, 4):
-                    linies = sum((60 - (p.ps + octave_shift*12)) for p in notes_d if (p.ps + octave_shift*12) < 60) + \
-                             sum(((p.ps + octave_shift*12) - 81) for p in notes_d if (p.ps + octave_shift*12) > 81)
-                    if linies < min_linies_d:
-                        min_linies_d = linies
-                        millors_shifts_d = [octave_shift]
-                    elif linies == min_linies_d:
-                        millors_shifts_d.append(octave_shift)
-                
+                min_penalty_d = float('inf')
+                for oct_shift in range(-4, 5):
+                    penalty = sum(max(0, c7_rh_min - (p.ps + oct_shift*12)) + max(0, (p.ps + oct_shift*12) - c7_rh_max) for p in notes_d)
+                    if penalty < min_penalty_d:
+                        min_penalty_d = penalty
+                        millors_shifts_d = [oct_shift]
+                    elif penalty == min_penalty_d:
+                        millors_shifts_d.append(oct_shift)
+                        
                 if centre_previ_d is not None:
                     shift_final_d = min(millors_shifts_d, key=lambda s: abs((sum(p.ps + s*12 for p in notes_d)/len(notes_d)) - centre_previ_d))
                 else:
-                    shift_final_d = random.choice(millors_shifts_d)
+                    shift_final_d = millors_shifts_d[0]
+                    
                 for p in notes_d: p.octave += shift_final_d
                 
+                # Guardem dades per al compàs 8 sense el shift aplicat encara
                 min_ps_dreta_c7 = min(p.ps for p in notes_d)
                 max_ps_dreta_c7 = max(p.ps for p in notes_d)
 
+            # Ajust Bloc Esquerra (C7)
             notes_e = [p for n in c_e.flatten().notes for p in (n.pitches if n.isChord else [n.pitch])]
             if notes_e:
-                min_linies_e = float('inf')
                 millors_shifts_e = []
-                for octave_shift in range(-4, 3):
-                    linies = sum((40 - (p.ps + octave_shift*12)) for p in notes_e if (p.ps + octave_shift*12) < 40) + \
-                             sum(((p.ps + octave_shift*12) - 60) for p in notes_e if (p.ps + octave_shift*12) > 60)
-                    if linies < min_linies_e:
-                        min_linies_e = linies
-                        millors_shifts_e = [octave_shift]
-                    elif linies == min_linies_e:
-                        millors_shifts_e.append(octave_shift)
-                
+                min_penalty_e = float('inf')
+                for oct_shift in range(-4, 5):
+                    penalty = sum(max(0, c7_lh_min - (p.ps + oct_shift*12)) + max(0, (p.ps + oct_shift*12) - c7_lh_max) for p in notes_e)
+                    if penalty < min_penalty_e:
+                        min_penalty_e = penalty
+                        millors_shifts_e = [oct_shift]
+                    elif penalty == min_penalty_e:
+                        millors_shifts_e.append(oct_shift)
+                        
                 if centre_previ_e is not None:
                     shift_final_e = min(millors_shifts_e, key=lambda s: abs((sum(p.ps + s*12 for p in notes_e)/len(notes_e)) - centre_previ_e))
                 else:
-                    shift_final_e = random.choice(millors_shifts_e)
+                    shift_final_e = millors_shifts_e[0]
+                    
                 for p in notes_e: p.octave += shift_final_e
 
         # --- CAS 3: COMPÀS 8 (Cadència Final) ---
@@ -319,7 +319,7 @@ def generar_estudi_web():
     grup_piano = layout.StaffGroup([part_d, part_e], name='', symbol='brace', barTogether=True)
     score_out.insert(0, part_d); score_out.insert(0, part_e); score_out.insert(0, grup_piano)
     
-    # Única transposició final cap a la tonalitat de destí
+    # Única transposició final
     if tonalitat_desti != 'C':
         score_out.transpose(itvl_transp, inPlace=True)
         
